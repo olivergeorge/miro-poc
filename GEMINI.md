@@ -1,51 +1,93 @@
 # Project Overview
 
-This repository contains a Proof of Concept (POC) for a collaborative whiteboard application, inspired by tools like Miro. It demonstrates real-time synchronization of sticky note positions, text content, and user cursors.
+Collaborative whiteboard POC inspired by Miro. Demonstrates real-time synchronization of sticky note positions, text content, and user cursors across browser tabs/clients.
 
-The application is built using:
-- **Frontend:** React, Vite, Tailwind CSS (v3)
-- **Backend/Realtime:** Supabase (Postgres + Realtime)
-- **CRDT (Conflict-free Replicated Data Type):** Yjs
-- **Yjs Provider:** `y-supabase`
+## Tech Stack
 
-The architecture relies on a "Unified Yjs" approach where both the spatial coordinates (X/Y) of elements and their text content are stored within a Yjs document. The `y-supabase` provider broadcasts these CRDT updates via Supabase Realtime for instant sharing, while periodically persisting the binary document state to a Postgres table.
+- **Frontend:** React 19, Vite 8, Tailwind CSS v3, lucide-react icons
+- **Backend/Realtime:** Supabase (local Docker via CLI v2.75+)
+- **CRDT:** Yjs with `y-supabase` provider (alpha)
 
-There are also conceptual documents (`01_CONCEPT.md` and `02_META_MODEL.md`) that outline the current architecture and future plans to move towards a strict Meta-Model to enforce schemas and entity relations on the canvas.
+## Architecture
+
+"Unified Yjs" approach: spatial coordinates (X/Y), colors, and text content all live in a single Yjs document. The `y-supabase` provider broadcasts CRDT updates via Supabase Realtime and persists binary document state to the `yjs_updates` Postgres table.
+
+Conceptual docs (`01_CONCEPT.md`, `02_META_MODEL.md`) outline future plans for a strict Meta-Model with schema validation and entity relations.
+
+## Project Structure
+
+```
+miro-poc/                    # Main application directory
+├── src/
+│   ├── App.jsx              # Main canvas component with Yjs integration
+│   ├── StickyNote.jsx       # Draggable sticky note component
+│   ├── lib/supabase.js      # Supabase client initialization
+│   ├── main.jsx             # React entry point
+│   ├── index.css            # Tailwind imports
+│   └── App.css              # App-specific styles
+├── supabase/
+│   ├── config.toml          # Local Supabase configuration
+│   ├── migrations/          # SQL migrations (boards + yjs_updates tables)
+│   └── seed.sql             # Seeds default board (UUID 00000000-...)
+├── .env                     # Local env vars (not committed)
+├── .env.example             # Template: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+└── postcss.config.js
+```
+
+## Database Schema
+
+- **boards** — `id` (uuid PK), `name`, `created_at`. RLS enabled with public access policy.
+- **yjs_updates** — `id` (uuid PK), `board_id` (FK to boards), `document_update` (bytea), `created_at`. Published to `supabase_realtime`. RLS enabled with public access policy.
+- **Seed data:** One default board with UUID `00000000-0000-0000-0000-000000000000`.
 
 ## Building and Running
 
-The project relies on a local Supabase environment orchestrated by Docker via the Supabase CLI. 
+All commands run from the `miro-poc/` directory.
 
-### Local Supabase Setup
-Start the local Supabase services, which automatically applies migrations and seeds the database:
+### Local Supabase
+
 ```bash
 cd miro-poc
-npx supabase start
+npx supabase start    # Start services, apply migrations & seed
+npx supabase stop     # Stop services
 ```
 
-Stop the local Supabase services:
-```bash
-cd miro-poc
-npx supabase stop
-```
+### Frontend Dev Server
 
-### Frontend Development Server
-Install dependencies and run the Vite development server:
 ```bash
 cd miro-poc
 npm install
-npm run dev
+npm run dev           # Vite dev server
+npm run build         # Production build
+npm run lint          # ESLint
 ```
 
-Build the application for production:
-```bash
-cd miro-poc
-npm run build
+### Environment Variables
+
+After `npx supabase start`, copy the Project URL and anon key into `miro-poc/.env`:
 ```
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=<publishable key from supabase status>
+```
+
+### Verifying the Setup
+
+Quick one-liner to confirm DB and realtime are working (requires psql):
+```bash
+PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
+  -c "SELECT (SELECT count(*) FROM boards) as board_exists, (SELECT count(*) FROM pg_publication_tables WHERE tablename = 'yjs_updates') as realtime_enabled;"
+```
+Expected: `board_exists = 1`, `realtime_enabled = 1`.
+
+Note: `npx supabase db query` is not available in CLI v2.75; use `psql` directly for ad-hoc queries.
 
 ## Development Conventions
 
-- **State Management:** State is managed via Yjs CRDTs. Currently, the implementation uses a schemaless `Y.Map` for storing sticky note properties (`x`, `y`, `color`) and `Y.Text` for the content.
-- **Future Architecture (Meta-Model):** The project aims to transition from the current schemaless state to a strict Meta-Model (`02_META_MODEL.md`). This will involve a validation layer (e.g., Zod), a factory render pattern for generic canvas elements, and graph operations for managing entity relations (like grouping and framing).
-- **Environment Variables:** The frontend relies on `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, which should be defined in `miro-poc/.env` based on the output from `npx supabase start`.
-- **Styling:** Tailwind CSS is used for utility-first styling.
+- **Commits:** Prefer atomic commits of working code. Each commit should be a self-contained, functioning change. Before committing, verify changes work by running `npm run build` and `npm run lint` from the `miro-poc/` directory. If database schema was changed, also verify with `psql` that migrations apply cleanly.
+- **State Management:** Yjs CRDTs — schemaless `Y.Map` for sticky note properties (`x`, `y`, `color`), `Y.Text` for content.
+- **Styling:** Tailwind CSS utility classes.
+- **Environment Variables:** `VITE_`-prefixed for Vite exposure to client code.
+- **Future Architecture (Meta-Model):** Transition to strict schema validation (Zod), factory render pattern for generic canvas elements, and graph operations for entity relations (grouping, framing). See `02_META_MODEL.md`.
