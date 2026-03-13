@@ -13,43 +13,31 @@ The application uses a "Unified Yjs" approach where both the spatial coordinates
 
 ## Getting Started
 
-### 1. Supabase Setup
-Run the following SQL in your Supabase SQL Editor to set up the necessary tables and enable real-time subscriptions:
+### 1. Local Supabase Setup
+This project uses the Supabase CLI to run the Postgres database and Realtime services locally via Docker.
 
-```sql
--- Create a table for the whiteboards
-CREATE TABLE boards (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL DEFAULT 'Untitled Board',
-  created_at timestamptz DEFAULT now()
-);
-
--- Create a table specifically formatted for y-supabase to store CRDT updates
-CREATE TABLE yjs_updates (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  board_id uuid REFERENCES boards(id) ON DELETE CASCADE,
-  document_update bytea NOT NULL, -- Stores the Yjs binary diffs
-  created_at timestamptz DEFAULT now()
-);
-
--- Enable Realtime for the yjs_updates table
-ALTER PUBLICATION supabase_realtime ADD TABLE yjs_updates;
-```
-
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env` in the `miro-poc` directory and add your Supabase project URL and anon key:
+Navigate to the project directory and start the Supabase services:
 
 ```bash
 cd miro-poc
+npx supabase start
+```
+
+This will automatically apply the database migrations (`init_schema.sql`) and seed the default `BOARD_ID` required by the application.
+
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env` in the `miro-poc` directory. The Supabase CLI will output your local API URL and anon key; update the `.env` file accordingly. (For the default local setup, it is usually `http://127.0.0.1:54321` and the generated anon key.)
+
+```bash
 cp .env.example .env
 ```
 
 ### 3. Start the Application
-Create a new board in your Supabase `boards` table, copy its UUID, and replace the `BOARD_ID` constant in `src/App.jsx`.
-
-Then run the development server:
+Run the Vite development server:
 
 ```bash
 npm install
 npm run dev
 ```
+
+You can also access the local Supabase Studio dashboard at [http://127.0.0.1:54323](http://127.0.0.1:54323) to view your tables and realtime updates.
