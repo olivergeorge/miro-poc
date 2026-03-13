@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as Y from 'yjs';
-import { SupabaseProvider } from 'y-supabase';
+import SupabaseProviderModule from 'y-supabase';
+const SupabaseProvider = SupabaseProviderModule.default || SupabaseProviderModule;
 import { supabase } from './lib/supabase';
 import StickyNote from './StickyNote';
 
